@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Prep Tracker</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f0;min-height:100vh;padding:1.5rem 1rem;}
+  .wrap{max-width:620px;margin:0 auto;}
+  .hdr{margin-bottom:1.25rem;}
+  .title{font-size:22px;font-weight:600;color:#1a1a1a;}
+  .sub{font-size:13px;color:#888;margin-top:3px;}
+  .progress-bg{height:6px;border-radius:999px;background:#ddd;margin-bottom:4px;}
+  .progress-fill{height:100%;border-radius:999px;background:#1D9E75;transition:width .4s ease;}
+  .prog-label{font-size:11px;color:#0F6E56;text-align:right;font-weight:500;margin-bottom:1.25rem;}
+  .filters{display:flex;gap:6px;margin-bottom:1.25rem;}
+  .fbtn{font-size:12px;padding:5px 13px;border-radius:999px;cursor:pointer;border:1.5px solid #ccc;background:none;font-family:inherit;transition:all .15s;color:#666;}
+  .fbtn.active{background:#1D9E75;color:#fff;border-color:#1D9E75;font-weight:500;}
+  .group{border-radius:14px;overflow:hidden;margin-bottom:8px;border:1.5px solid transparent;}
+  .ghdr{display:flex;align-items:center;gap:9px;padding:9px 14px;}
+  .gdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+  .gname{font-size:13px;font-weight:600;flex:1;}
+  .gdate{font-size:11px;margin-left:6px;font-weight:400;opacity:.8;}
+  .gcount{font-size:11px;font-weight:500;margin-left:auto;flex-shrink:0;}
+  .task-row{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-top:1px solid rgba(0,0,0,0.07);transition:filter .12s;user-select:none;}
+  .task-row:hover{filter:brightness(0.96);}
+  .cb{width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;border:2px solid;}
+  .ttext{flex:1;font-size:13px;transition:all .15s;line-height:1.4;}
+  .tdate{font-size:11px;flex-shrink:0;opacity:.7;}
+  .sync{font-size:11px;color:#888;text-align:center;padding:.5rem;margin-bottom:.5rem;}
+  .syncing{color:#BA7517;}
+  .synced{color:#1D9E75;}
+  .offline{color:#E24B4A;}
+  .empty{text-align:center;padding:2rem;font-size:13px;color:#888;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="title">Event prep tracker</div>
+    <div class="sub" id="sub-text">Summer & fall 2026</div>
+  </div>
+
+  <div class="progress-bg"><div class="progress-fill" id="prog-fill" style="width:0%"></div></div>
+  <div class="prog-label" id="prog-label">0% complete</div>
+
+  <div class="filters">
+    <button class="fbtn active" id="f-all" onclick="setFilter('all')">All</button>
+    <button class="fbtn" id="f-pending" onclick="setFilter('pending')">Pending</button>
+    <button class="fbtn" id="f-done" onclick="setFilter('done')">Done</button>
+  </div>
+
+  <div class="sync" id="sync-status">Connecting...</div>
+  <div id="groups-container"></div>
+  <div class="empty" id="empty-msg" style="display:none;"></div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCp8eV2DxZv4u5Iqsreg9Qp9N6pu3ZMm5c",
+  authDomain: "summer-task-tracker.firebaseapp.com",
+  databaseURL: "https://summer-task-tracker-default-rtdb.firebaseio.com",
+  projectId: "summer-task-tracker",
+  storageBucket: "summer-task-tracker.firebasestorage.app",
+  messagingSenderId: "66147193064",
+  appId: "1:66147193064:web:b8c95b5322c5c17ee6795d"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const checkedRef = ref(db, "checked");
+
+const GROUPS = [
+  { id:"fd", name:"Finance Discussion", eventDate:"Sat Jul 11", bg:"#EEEDFE", border:"#AFA9EC", dot:"#7F77DD", text:"#3C3489", doneText:"#8B82D6",
+    tasks:[{id:"fd1",date:"Sat Jun 27",text:"Plan for Finance Discussion"}]},
+  { id:"bm", name:"Bow Memorial", eventDate:"Fri Jul 24", bg:"#E1F5EE", border:"#5DCAA5", dot:"#1D9E75", text:"#085041", doneText:"#4AAB85",
+    tasks:[
+      {id:"bm1",date:"Wed Jun 24",text:"Confirm Black Suit fits and is pressed"},
+      {id:"bm2",date:"Fri Jul 3", text:"Claire get dress"},
+      {id:"bm3",date:"Sat Jul 4", text:"Get Gia baby gift (baby book signed)"},
+      {id:"bm4",date:"Fri Jul 10",text:"Saturday dinner resy"},
+      {id:"bm5",date:"Fri Jul 17",text:"Confirm Gia Brunch"},
+    ]},
+  { id:"caw", name:"Callie's Wedding", eventDate:"Fri Aug 14", bg:"#FAECE7", border:"#F0997B", dot:"#D85A30", text:"#712B13", doneText:"#C07050",
+    tasks:[
+      {id:"caw1",date:"Mon Jun 22",text:"Book flights"},
+      {id:"caw2",date:"Wed Jul 15",text:"Claire get a dress/shoes"},
+      {id:"caw3",date:"Thu Jul 16",text:"Dan confirm suits fit"},
+      {id:"caw4",date:"Sat Jul 25",text:"Suit dry cleaned"},
+    ]},
+  { id:"cnw", name:"Conner's Wedding", eventDate:"Thu Sep 3", bg:"#E6F1FB", border:"#85B7EB", dot:"#378ADD", text:"#0C447C", doneText:"#5090CC",
+    tasks:[
+      {id:"cnw1",date:"Sun Jul 5", text:"Book flight"},
+      {id:"cnw2",date:"Mon Jul 6", text:"Confirm I can stay with Yip"},
+      {id:"cnw3",date:"Wed Aug 5", text:"Buy Cubs ticket"},
+      {id:"cnw4",date:"Fri Aug 14",text:"Suit pressed"},
+    ]},
+  { id:"cb", name:"Caitrin & Brian Visit", eventDate:"Fri Sep 4", bg:"#FAEEDA", border:"#EF9F27", dot:"#BA7517", text:"#633806", doneText:"#B08030",
+    tasks:[
+      {id:"cb1",date:"Sun Jul 26",text:"Share itinerary"},
+      {id:"cb2",date:"Thu Aug 6", text:"Make reservations"},
+      {id:"cb3",date:"Fri Aug 7", text:"Prepare guest room"},
+      {id:"cb4",date:"Fri Aug 21",text:"Clean House"},
+    ]},
+  { id:"mbs", name:"Morgan's Bridal Shower", eventDate:"Sat Sep 26", bg:"#FBEAF0", border:"#ED93B1", dot:"#D4537E", text:"#72243E", doneText:"#C06080",
+    tasks:[
+      {id:"mbs1",date:"Wed Jul 29",text:"Book flights"},
+      {id:"mbs2",date:"Sat Aug 15",text:"Decide Advent calendar"},
+      {id:"mbs3",date:"Sun Aug 16",text:"Test Des"},
+      {id:"mbs4",date:"Sat Sep 5", text:"Confirm dress"},
+    ]},
+  { id:"yw", name:"Yip Wedding", eventDate:"Sat Oct 10", bg:"#EAF3DE", border:"#97C459", dot:"#639922", text:"#27500A", doneText:"#70A030",
+    tasks:[
+      {id:"yw1",date:"Wed Aug 12",text:"Book flights"},
+      {id:"yw2",date:"Thu Aug 13",text:"RSVP"},
+      {id:"yw3",date:"Sat Aug 29",text:"Claire confirm dress"},
+      {id:"yw4",date:"Thu Sep 10",text:"Dan confirm suit"},
+      {id:"yw5",date:"Fri Sep 11",text:"Wedding Gift"},
+    ]},
+  { id:"it", name:"Italy Trip", eventDate:"Mon Oct 19", bg:"#E6F1FB", border:"#85B7EB", dot:"#378ADD", text:"#0C447C", doneText:"#5090CC",
+    tasks:[
+      {id:"it1", date:"Fri Jun 19",text:"Monitor ATL→FCO flights on Google Flights (set price alert)"},
+      {id:"it2", date:"Sat Jun 20",text:"Confirm Sorrento Airbnb"},
+      {id:"it3", date:"Sun Jun 21",text:"Book La Marzocco factory tour (limited capacity)"},
+      {id:"it4", date:"Mon Jun 22",text:"Confirm Florence Airbnb"},
+      {id:"it5", date:"Wed Jul 22",text:"Book ATL→FCO flights"},
+      {id:"it6", date:"Thu Jul 23",text:"Book Frecciarossa train tickets between cities"},
+      {id:"it7", date:"Fri Jul 24",text:"Check passport expiration dates"},
+      {id:"it8", date:"Mon Aug 3", text:"Book Super Chianti Wine Tour"},
+      {id:"it9", date:"Thu Aug 20",text:"Order travel adapters and packing essentials"},
+      {id:"it10",date:"Fri Sep 4", text:"Build day-by-day itinerary doc"},
+      {id:"it11",date:"Mon Oct 5", text:"Notify bank of travel dates"},
+      {id:"it12",date:"Mon Oct 12",text:"Download offline maps for all cities"},
+    ]},
+  { id:"clb", name:"Claire's Birthday Party", eventDate:"Sat Nov 7", bg:"#FBEAF0", border:"#ED93B1", dot:"#D4537E", text:"#72243E", doneText:"#C06080",
+    tasks:[{id:"clb1",date:"Wed Sep 9",text:"Make reservation"}]},
+  { id:"mw", name:"Morgan Wedding", eventDate:"Sat Nov 14", bg:"#EEEDFE", border:"#AFA9EC", dot:"#7F77DD", text:"#3C3489", doneText:"#8B82D6",
+    tasks:[
+      {id:"mw1",date:"Sat Jul 18", text:"Book hotel"},
+      {id:"mw2",date:"Wed Sep 16", text:"Book flights"},
+      {id:"mw3",date:"Thu Sep 17", text:"Write Love You sign"},
+      {id:"mw4",date:"Fri Sep 18", text:"Claire Dress"},
+      {id:"mw5",date:"Sat Oct 3",  text:"Bride book"},
+      {id:"mw6",date:"Sun Oct 4",  text:"Figure out car plans (borrow or rent)"},
+      {id:"mw7",date:"Thu Oct 15", text:"Confirm suit (use from Yip's)"},
+    ]},
+  { id:"tg", name:"Thanksgiving", eventDate:"Thu Nov 26", bg:"#FAEEDA", border:"#EF9F27", dot:"#BA7517", text:"#633806", doneText:"#B08030",
+    tasks:[{id:"tg1",date:"Sat Sep 12",text:"Figure out plans and book flights"}]},
+];
+
+let checked = {};
+let filter = "all";
+let connected = false;
+
+const syncEl = document.getElementById("sync-status");
+
+onValue(checkedRef, (snapshot) => {
+  checked = snapshot.val() || {};
+  connected = true;
+  syncEl.className = "sync synced";
+  syncEl.textContent = "Live — changes sync instantly";
+  render();
+}, (error) => {
+  syncEl.className = "sync offline";
+  syncEl.textContent = "Offline — check your connection";
+});
+
+async function toggle(id) {
+  const next = { ...checked };
+  if (next[id]) delete next[id]; else next[id] = true;
+  syncEl.className = "sync syncing";
+  syncEl.textContent = "Saving...";
+  const updates = {};
+  updates[id] = next[id] || null;
+  await update(checkedRef, updates);
+}
+
+window.toggle = toggle;
+
+function setFilter(f) {
+  filter = f;
+  render();
+}
+window.setFilter = setFilter;
+
+function render() {
+  const total = GROUPS.reduce((s,g)=>s+g.tasks.length,0);
+  const done = Object.values(checked).filter(Boolean).length;
+  const pct = Math.round((done/total)*100);
+
+  document.getElementById("prog-fill").style.width = pct + "%";
+  document.getElementById("prog-label").textContent = pct + "% complete";
+  document.getElementById("sub-text").textContent = `Summer & fall 2026 · ${done} of ${total} tasks done`;
+
+  ["all","pending","done"].forEach(f => {
+    const btn = document.getElementById("f-"+f);
+    btn.className = "fbtn" + (filter === f ? " active" : "");
+  });
+
+  let html = "";
+  let anyVisible = false;
+
+  GROUPS.forEach(g => {
+    const visible = g.tasks.filter(t => {
+      if (filter === "done") return !!checked[t.id];
+      if (filter === "pending") return !checked[t.id];
+      return true;
+    });
+    if (!visible.length) return;
+    anyVisible = true;
+
+    const gDone = g.tasks.filter(t => checked[t.id]).length;
+    const gTotal = g.tasks.length;
+    const allDone = gDone === gTotal;
+
+    html += `<div class="group" style="background:${g.bg};border-color:${g.border};opacity:${allDone?0.6:1};">`;
+    html += `<div class="ghdr">
+      <div class="gdot" style="background:${g.dot};"></div>
+      <span class="gname" style="color:${g.text};">${g.name}<span class="gdate" style="color:${g.dot};">${g.eventDate}</span></span>
+      <span class="gcount" style="color:${allDone?g.dot:g.text};">${gDone}/${gTotal}${allDone?' ✓':''}</span>
+    </div>`;
+
+    visible.forEach(t => {
+      const isDone = !!checked[t.id];
+      html += `<div class="task-row" style="background:${g.bg};" onclick="toggle('${t.id}')">
+        <div class="cb" style="border-color:${isDone?g.dot:g.border};background:${isDone?g.dot:'transparent'};">
+          ${isDone?`<svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5L3.5 6L8 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`:''}
+        </div>
+        <span class="ttext" style="color:${isDone?g.doneText:g.text};text-decoration:${isDone?'line-through':'none'};">${t.text}</span>
+        <span class="tdate" style="color:${g.dot};">${t.date}</span>
+      </div>`;
+    });
+
+    html += `</div>`;
+  });
+
+  document.getElementById("groups-container").innerHTML = html;
+  const emptyMsg = document.getElementById("empty-msg");
+  emptyMsg.style.display = anyVisible ? "none" : "";
+  if (!anyVisible) emptyMsg.textContent = filter === "done" ? "Nothing checked off yet." : "All done!";
+}
+
+render();
+</script>
+</body>
+</html>
